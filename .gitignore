@@ -5,8 +5,9 @@
 *.data*
 *.mat
 *.ckpt
-./sparse_deep/*
-./logs*
+./sparse_deep/
+./logs/
+./logs_resnet/
 ./imgclass_train_jpeg/
 ./imgclass_trainingset/
 __pycache__/
