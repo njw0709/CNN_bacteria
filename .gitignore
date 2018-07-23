@@ -1,0 +1,14 @@
+*.tif
+*.jpg
+*.index
+*.meta
+*.data*
+*.mat
+*.ckpt
+./sparse_deep/*
+./logs*
+./imgclass_train_jpeg/
+./imgclass_trainingset/
+__pycache__/
+events.out.tf*
+
