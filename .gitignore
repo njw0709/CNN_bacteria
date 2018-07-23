@@ -11,4 +11,4 @@
 ./imgclass_trainingset/
 __pycache__/
 events.out.tf*
-
+checkpoint
