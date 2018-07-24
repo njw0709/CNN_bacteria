@@ -129,6 +129,7 @@ class TFLearn_Resnet:
 
 
 if __name__ == '__main__':
-    dataset = DataHandler()
+    training=True
+    dataset = DataHandler(training)
     transferlearn=TFLearn_Resnet(dataset)
     transferlearn.train()
