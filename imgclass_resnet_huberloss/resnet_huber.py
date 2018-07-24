@@ -53,7 +53,7 @@ class TFLearn_Resnet:
 
         #State the metrics that you want to predict. We get a predictions that is not one_hot_encoded.
         self.probabilities = self.end_points['predictions']
-        self.accuracy, self.accuracy_update = tf.metrics.accuracy(self.predictions, self.targets)
+        self.accuracy, self.accuracy_update = tf.metrics.accuracy(self.targets,tf.cast(tf.round(self.predictions),dtype=tf.int32))
         self.metrics_op = tf.group(self.accuracy_update, self.probabilities)
 
     def _setup_tb_summary(self):
@@ -64,13 +64,13 @@ class TFLearn_Resnet:
         self.my_summary_op = tf.summary.merge_all()
 
     #Now we need to create a training step function that runs both the train_op, metrics_op and updates the global_step concurrently.
-    def train_step(sess, train_op, global_step):
+    def train_step(self,sess, train_op, global_step):
         '''
         Simply runs a session for the three arguments provided and gives a logging on the time elapsed for each global step
         '''
         #Check the time for each sess run
         start_time = time.time()
-        total_loss, global_step_count, _ = sess.run([train_op, global_step, metrics_op])
+        total_loss, global_step_count, _ = sess.run([train_op, global_step, self.metrics_op])
         time_elapsed = time.time() - start_time
 
         #Run the logging to print some results
@@ -101,6 +101,7 @@ class TFLearn_Resnet:
                     logging.info('Current Streaming Accuracy: %s', accuracy_value)
                     # optionally, print your logits and predictions for a sanity check that things are going fine.
                     predictions_value, labels_value = sess.run([self.predictions, self.targets])
+                    print('Epoch: ', step/self.cfg.num_batches_per_epoch)
                     print('Current Learning Rate: \n', learning_rate_value)
                     print('Current Streaming Accuracy: \n', accuracy_value)
 
@@ -113,9 +114,12 @@ class TFLearn_Resnet:
                     
                 if step % 100==0:
                     print('Step: ', step, 'Epoch: ', math.ceil(step/self.cfg.num_batches_per_epoch))
+                    learning_rate_value, accuracy_value = sess.run([self.lr, self.accuracy])
                     print('Current Loss: \n', loss)
+                    print('Current Learning Rate: \n', learning_rate_value)
+                    print('Current Streaming Accuracy: \n', accuracy_value)
 
-                if step % self.cfg.num_batches_per_epoch*10 == 0:
+                if step % 50000 == 0:
                     model_name = ".\\imgclass_checkpt"
                     saver.save(sess, model_name, global_step=step)
 
@@ -130,6 +134,7 @@ class TFLearn_Resnet:
 
 if __name__ == '__main__':
     training=True
-    dataset = DataHandler(training)
+    preprocessed = True 
+    dataset = DataHandler(training, preprocessed)
     transferlearn=TFLearn_Resnet(dataset)
     transferlearn.train()

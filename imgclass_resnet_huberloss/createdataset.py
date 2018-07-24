@@ -80,7 +80,6 @@ class DataHandler:
 		return dataset
 
 
-
 	def parse_fn_preprocessed(self,filename,label):
 		image_string = tf.read_file(filename)
 		image_decoded = tf.image.decode_jpeg(image_string)
