@@ -35,16 +35,13 @@ class DataHandler:
 				item = DataItem()
 				item.image_id = i
 				item.im_path = sample[0][0]
-				if self.istraining:
-					item.zdepth = sample[1][0][0]
+				
+				item.zdepth = sample[1][0][0]
 				data.append(item)
 
 
 			imgpaths=tf.constant([item.im_path for item in data])
-			if self.istraining:
-				zdepths =tf.constant([item.zdepth for item in data])
-			else:
-				zdepths = tf.zeros_like(imgpaths)
+			zdepths =tf.constant([item.zdepth for item in data])
 
 			###############
 			## Setup tf.dataset (Data Feeder)
@@ -61,9 +58,6 @@ class DataHandler:
 			return dataset
 
 		#data input: (index,xcoord,ycoord) and img
-
-
-
 
 
 	def _extend_cfg(self):
