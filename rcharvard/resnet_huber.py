@@ -79,7 +79,7 @@ class TFLearn_Resnet:
         return total_loss, global_step_count
 
     def restore_fn(self,sess):
-        checkpoint_file = './imgclass_checkpt-200000.ckpt'
+        checkpoint_file = './imgclass_checkpt-400000.ckpt'
         return self.restorer.restore(sess, checkpoint_file)
 
     def train(self):
