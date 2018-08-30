@@ -102,7 +102,7 @@ class DataHandler:
 		convlabel = tf.expand_dims(convlabel,axis=0)
 
 		#Todo: if locref, return locref
-		if self.cfg.locref==True:
+		if self.cfg.locref:
 			indexfun = tf.abs(tf.range(0,depth) - label)
 			locref_target = tf.multiply(indexfun,convlabel)*self.cfg.locrefstdev
 			return img, onehot, convlabel, locref_target

@@ -22,7 +22,7 @@ cfg.initial_learning_rate = 0.05
 cfg.learning_rate_decay_factor = 0.97
 cfg.num_epochs_before_decay = 5
 cfg.global_step = tf.train.get_or_create_global_step()
-cfg.locref=True
+cfg.locref=False
 cfg.locref_loss_weight=0.05
 cfg.locrefstdev=7.2801
 

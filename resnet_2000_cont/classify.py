@@ -25,34 +25,27 @@ for iteration in range(1,int(img_num_total/batch_size)):
 # Dependencies
 ####################################################
 
-import sys
 import os
 from createdataset import DataHandler
 import numpy as np
 import tensorflow as tf
 import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim.nets import resnet_v1
+import config
+import skimage.color
+import numpy as np
+
 
 
 class Classify:
-    def __init__(self,cfg,testing):
-        self.dh=DataHandler(False,cfg.preprocessed)
-        self.cfg = self.dh.cfg
-        self._create_batch_iterator(testing)
-        self._load_pretrainednet(testing)
+    def __init__(self):
+        self.cfg = config.cfg
+        self._load_pretrainednet()
 
-
-    def _create_batch_iterator(self,testing):
-        iterator=self.dh.data.make_one_shot_iterator()
-        if testing:
-            self.inputs, self.answers =iterator.get_next()
-        else:
-            self.inputs, _ =iterator.get_next()
-
-
-    def _load_pretrainednet(self,testing):
-
+    def _load_pretrainednet(self):
+        batchsize = 1
         # Check which snap shots are available and get the most recent version
+        self.inputs = tf.placeholder(tf.float32, shape=[batchsize, None, None, 3])
 
         Snapshots = np.array([
             fn.split('.')[0]
@@ -77,12 +70,9 @@ class Classify:
         
         ## method - 2000 classes
         #Perform one-hot-encoding of the labels (Try one-hot-encoding within the load_batch function!)
-        one_hot_labels = slim.one_hot_encoding(self.answers, self.cfg.num_classes)
-        one_hot_labels=tf.expand_dims(one_hot_labels,axis=1)
-        
-        self.predictions = tf.argmax(tf.squeeze(self.end_points['predictions']), 1)
-        if testing:
-            self.accuracy, accuracy_update = tf.metrics.accuracy(self.predictions, self.answers)
+        pred=tf.expand_dims(tf.squeeze(self.end_points['predictions']),axis=-1)
+        self.predictions = tf.argmax(pred)
+
 
 
     def initialize(self):
@@ -96,16 +86,11 @@ class Classify:
         # Restore variables from disk.
         restorer.restore(self.sess, self.cfg.init_weights)
 
-    def predictZ(self):
+    def predictZ(self,image):
         #get predictions
-        Zpositions=self.sess.run(self.predictions)
-        return Zpositions
+        image = np.expand_dims(skimage.color.gray2rgb(image),axis=0)
+        Zpositions, endpoints =self.sess.run([self.predictions, self.end_points], feed_dict={self.inputs: image})
+        return Zpositions, np.squeeze(endpoints['predictions'])
 
-    def getaccuracy(self):
-        Pred = self.sess.run(self.predictions)
-        Accuracy = self.sess.run(self.accuracy)
-        Answers = self.sess.run(self.answers)
-
-        return Accuracy, Pred, Answers
 
 

@@ -3,9 +3,9 @@ import tensorflow.contrib.slim as slim
 from tensorflow.contrib.slim.nets import resnet_v1
 import math
 import time
-from tensorflow.contrib.framework.python.ops.variables import get_or_create_global_step
 from tensorflow.python.platform import tf_logging as logging
 from createdataset import DataHandler
+import os
 
 class TFLearn_Resnet:
     def __init__(self, dataset):
@@ -27,8 +27,8 @@ class TFLearn_Resnet:
         with slim.arg_scope(resnet_v1.resnet_arg_scope()):
             self.net, self.end_points = resnet_v1.resnet_v1_50(self.inputs, self.cfg.num_classes, is_training=True)
 
-        exclude = ['resnet_v1_50/logits','resnet_v1_50/predictions']
-        self.variables_to_restore = slim.get_variables_to_restore(exclude = exclude)
+        # exclude = ['resnet_v1_50/logits','resnet_v1_50/predictions']
+        self.variables_to_restore = slim.get_variables_to_restore(include=['resnet_v1'])
         self.restorer = tf.train.Saver(self.variables_to_restore)
 
         #Performs the equivalent to tf.nn.sparse_softmax_cross_entropy_with_logits but enhanced with checks
@@ -80,7 +80,7 @@ class TFLearn_Resnet:
         return loss, global_step_count
 
     def restore_fn(self,sess):
-        checkpoint_file = '.\\resnet_v1_50.ckpt'
+        checkpoint_file = '.\img2000cont-250000'
         return self.restorer.restore(sess, checkpoint_file)
 
     def train(self):
@@ -133,6 +133,8 @@ class TFLearn_Resnet:
 
 
 if __name__ == '__main__':
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
     training=True
     preprocessed = True 
     dataset = DataHandler(training, preprocessed)
