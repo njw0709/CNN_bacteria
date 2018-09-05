@@ -54,7 +54,7 @@ class Classify:
         ])
         increasing_indices = np.argsort([int(m.split('-')[1]) for m in Snapshots])
         Snapshots = Snapshots[increasing_indices]
-        self.cfg['init_weights'] = self.cfg.modelfolder + Snapshots[-2]
+        self.cfg['init_weights'] = self.cfg.modelfolder + Snapshots[-1]
         print(self.cfg['init_weights'])
 
         #setup the network for prediction
@@ -70,9 +70,8 @@ class Classify:
         
         ## method - 2000 classes
         #Perform one-hot-encoding of the labels (Try one-hot-encoding within the load_batch function!)
-        self.pred1=tf.squeeze(self.end_points['predictions'])
-        self.pred=tf.expand_dims(self.pred1,axis=-1)
-        self.predictions = tf.argmax(self.pred)
+        pred=tf.expand_dims(tf.squeeze(self.end_points['predictions']),axis=-1)
+        self.predictions = tf.argmax(pred)
 
 
 
@@ -89,9 +88,7 @@ class Classify:
 
     def predictZ(self,image):
         #get predictions
-        image=np.expand_dims(image,axis=0)
-        image=np.expand_dims(image,axis=-1)
-        image=image-[[[[123.68, 116.779, 103.939]]]]
+        image = np.expand_dims(skimage.color.gray2rgb(image),axis=0)
         Zpositions, endpoints =self.sess.run([self.predictions, self.end_points], feed_dict={self.inputs: image})
         return Zpositions, np.squeeze(endpoints['predictions'])
 

@@ -42,7 +42,7 @@ def drawplots(image,zpred,answer,nums,signal,axes):
     axes[3].plot(z, signal)
 
 testing = True
-matfilepath = '..\\img_class_data.mat'
+matfilepath = '..\\img_class_png.mat'
 resnettest = Classify()
 resnettest.initialize()
 data = load_dataset(matfilepath)
@@ -59,6 +59,5 @@ for datum in data:
     axes=[ax1,ax2,ax3,ax4]
     nums=[zpospred[0],datum.zdepth]
     drawplots(image,refimg,answer,nums,signal,axes)
-    print('1st frame done')
 
 

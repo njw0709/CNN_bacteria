@@ -25,17 +25,21 @@ class TFLearn_Resnet:
     def _import_resnet(self):
         #Create the model inference
         with slim.arg_scope(resnet_v1.resnet_arg_scope()):
-            self.net, self.end_points = resnet_v1.resnet_v1_50(self.inputs, self.cfg.num_classes, is_training=True)
+            self.net, self.end_points = resnet_v1.resnet_v1_50(self.inputs, global_pool=False,
+                                                               output_stride=4, is_training=False)
 
-        exclude = ['resnet_v1_50/logits','resnet_v1_50/predictions']
-        self.variables_to_restore = slim.get_variables_to_restore(exclude=exclude)
+        self.variables_to_restore = slim.get_variables_to_restore(include=['resnet_v1'])
         self.restorer = tf.train.Saver(self.variables_to_restore)
 
+        self.out = self.prediction_layers(self.net, self.end_points)
+
         #Performs the equivalent to tf.nn.sparse_softmax_cross_entropy_with_logits but enhanced with checks
-        self.loss = tf.losses.sigmoid_cross_entropy(self.epstarg,self.net)
+        self.loss = tf.losses.sigmoid_cross_entropy(self.epstarg,self.out['part_pred'])
         self.total_loss = self.loss
+
         if self.cfg.locref:
-            self.locrefloss=self.cfg.locref_loss_weight*tf.losses.huber_loss(self.locref_targets, self.net, self.epstarg)
+            self.locrefloss=self.cfg.locref_loss_weight*tf.losses.huber_loss(self.locref_targets,
+                                                                             self.out['locref'], self.epstarg)
             self.total_loss=self.total_loss+self.locrefloss
 
 
@@ -53,14 +57,35 @@ class TFLearn_Resnet:
 
         #Create the train_op.
         self.train_op = slim.learning.create_train_op(self.total_loss, self.optimizer)
-        target = tf.argmax(self.targets,axis=1)
-        target = tf.expand_dims(target,axis=1)
-        self.avedelta = tf.losses.absolute_difference(target,tf.squeeze(tf.argmax(self.net,axis=3),axis=1))
+
+    def prediction_layers(self, features, end_points, reuse=None):
+        cfg = self.cfg
+
+        out = {}
+        with tf.variable_scope('pose', reuse=reuse):
+            out['part_pred'] = self.prediction_layer(cfg, features, 'part_pred',
+                                                cfg.num_classes)
+            if cfg.location_refinement:
+                out['locref'] = self.prediction_layer(cfg, features, 'locref_pred',
+                                                 cfg.num_classes*2)
+
+
+        return out
+
+    def prediction_layer(self, cfg, input, name, num_outputs):
+        with slim.arg_scope([slim.conv2d, slim.conv2d_transpose], padding='SAME',
+                            activation_fn=None, normalizer_fn=None,
+                            weights_regularizer=slim.l2_regularizer(cfg.weight_decay)):
+            with tf.variable_scope(name):
+                pred = slim.conv2d_transpose(input, num_outputs,
+                                             kernel_size=[3, 3], stride=2,
+                                             scope='block4')
+                return pred
+
 
     def _setup_tb_summary(self):
         #Now finally create all the summaries you need to monitor and group them into one summary op.
         tf.summary.scalar('losses/Total_Loss', self.loss)
-        tf.summary.scalar('accuracy', self.avedelta)
         tf.summary.scalar('learning_rate', self.lr)
         self.my_summary_op = tf.summary.merge_all()
 
@@ -80,7 +105,7 @@ class TFLearn_Resnet:
         return loss, global_step_count
 
     def restore_fn(self,sess):
-        checkpoint_file = '.\snapshot-700000'
+        checkpoint_file = self.cfg.checkpoint
         return self.restorer.restore(sess, checkpoint_file)
 
     def train(self):
@@ -97,13 +122,13 @@ class TFLearn_Resnet:
                 
                 if step % self.cfg.num_batches_per_epoch == 0:
                     logging.info('Epoch %s/%s', step/self.cfg.num_batches_per_epoch + 1, self.cfg.num_epochs)
-                    learning_rate_value, accuracy_value = sess.run([self.lr, self.avedelta])
+                    learning_rate_value = sess.run([self.lr])
                     logging.info('Current Learning Rate: %s', learning_rate_value)
-                    logging.info('Current Streaming Accuracy: %s', accuracy_value)
+                    logging.info('Current Streaming Accuracy: %s')
                     # optionally, print your logits and predictions for a sanity check that things are going fine.
                     print('Epoch: ', step/self.cfg.num_batches_per_epoch)
                     print('Current Learning Rate: \n', learning_rate_value)
-                    print('Current Streaming Accuracy: \n', accuracy_value)
+                    print('Current Streaming Accuracy: \n')
 
                 loss, _ = self.train_step(sess, self.train_op, sv.global_step)
 
@@ -114,10 +139,10 @@ class TFLearn_Resnet:
                     
                 if step % 100==0:
                     print('Step: ', step, 'Epoch: ', math.ceil(step/self.cfg.num_batches_per_epoch))
-                    learning_rate_value, accuracy_value = sess.run([self.lr, self.avedelta])
+                    learning_rate_value = sess.run([self.lr])
                     print('Current Loss: \n', loss)
                     print('Current Learning Rate: \n', learning_rate_value)
-                    print('Current Streaming Accuracy: \n', accuracy_value)
+                    print('Current Streaming Accuracy: \n')
 
                 if step % 50000 == 0:
                     model_name = ".\\img2000cont"
@@ -125,7 +150,6 @@ class TFLearn_Resnet:
 
             #We log the final training loss and accuracy
             logging.info('Final Loss: %s', loss)
-            logging.info('Final Accuracy: %s', sess.run(self.avedelta))
 
             #Once all the training has been done, save the log files and checkpoint model
             logging.info('Finished training! Saving model to disk now.')
@@ -133,6 +157,8 @@ class TFLearn_Resnet:
 
 
 if __name__ == '__main__':
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
     training=True
     preprocessed = True 
     dataset = DataHandler(training, preprocessed)

@@ -21,13 +21,10 @@ class DataHandler:
 	def _load_dataset(self):
 			# Load Matlab file dataset annotation
 			mlab = sio.loadmat(self.cfg.matfilepath)
-			raw_data = mlab
-			# print(raw_data)
 			mlab=mlab['data_compiler']
 			self.num_images = mlab.shape[1]
-			data = []
+			self.data = []
 
-			sample = mlab[0,1]
 			for i in range(self.num_images):
 				sample = mlab[0, i]
 
@@ -35,18 +32,19 @@ class DataHandler:
 				item.image_id = i
 				item.im_path = sample[0][0]
 				
-				item.zdepth = sample[1][0][0]
-				data.append(item)
-
+				item.positions = sample[1]
+				item.scmap = self.compute_scmap(item.positions,[256,256])
+				self.data.append(item)
 
 			imgpaths=tf.constant([item.im_path for item in data])
-			zdepths =tf.constant([item.zdepth for item in data])
+			positions = tf.constant([item.positions for item in data])
+			scmaps =tf.constant([item.scmap for item in data])
 
 			###############
 			## Setup tf.dataset (Data Feeder)
 			###############
 
-			dataset = tf.data.Dataset.from_tensor_slices((imgpaths, zdepths))
+			dataset = tf.data.Dataset.from_tensor_slices((imgpaths,positions,scmaps))
 			if self.istraining:
 				dataset = dataset.map(map_func=self.parse_fn_preprocessed, num_parallel_calls=8)
 				dataset = dataset.batch(self.cfg.batchsize)
@@ -54,11 +52,9 @@ class DataHandler:
 				dataset = dataset.shuffle(self.cfg.buffersize)
 				dataset = dataset.repeat()
 			else:
-				dataset = dataset.batch(self.cfg.batchsize)
 				dataset = dataset.map(map_func=self.parse_fn_preprocessed, num_parallel_calls=8)
+				dataset = dataset.batch(self.cfg.batchsize)
 			return dataset
-
-		#data input: (index,xcoord,ycoord) and img
 
 
 	def _extend_cfg(self):
@@ -75,49 +71,33 @@ class DataHandler:
 		return dataset
 
 
-	def parse_fn_preprocessed(self,filename,label):
+	def parse_fn_preprocessed(self, imgpath, positions, scmap):
 		# Process image
+		filename=imgpath
 		image_string = tf.read_file(filename)
 		image_decoded = tf.image.decode_png(image_string)
-		image_resized = tf.image.resize_images(image_decoded, [224, 224])
-		img_float = tf.cast(image_resized,tf.float32)
+		img_float = tf.cast(image_decoded,tf.float32)
 		avg=tf.constant([[[123.68, 116.779, 103.939]]])
 		img=img_float-avg
+		return img, positions, scmap
 
-		# Process labels
-		depth=2000
-		label=tf.cast(label,tf.int32)
-		onehot=tf.one_hot(label,depth)
-		base=np.transpose([np.linspace(-self.cfg.epsilon/2,self.cfg.epsilon/2,self.cfg.epsilon)])
-		kernel = np.exp(-base**2/(self.cfg.epsilon*3))
-		kernel=tf.constant(kernel,dtype=tf.float32)
-		kernel=tf.expand_dims(kernel,axis=-1)
-		kernel=tf.expand_dims(kernel,axis=-1)
+	def compute_scmap(self,label,img_shape):
+		depth = 2000
+		scmap=np.zeros([img_shape[0],img_shape[1],depth])
+		for bug in label:
+			x,y,z=np.meshgrid(np.linspace(-(bug[0]-1),img_shape[0]-(bug[0]-1),img_shape[0]),
+							  np.linspace(-(bug[1]-1),img_shape[1]-(bug[1]-1),img_shape[1]),
+							  np.linspace(-(bug[2]-1),depth-(bug[0]-1),depth))
+			rad_sq=x**2+y**2+z**2
+			dist_thresh_sq=self.cfg.pos_thres**2
+			bugscmap=(1.0/dist_thresh_sq)*(dist_thresh_sq-rad_sq)
+			radmask=rad_sq>dist_thresh_sq
+			scmapmask=scmap>0.1
+			bugscmap[radmask]=0
+			bugscmap[scmapmask]=0
+			scmap+=bugscmap
+		return scmap
 
-		label_onehot=tf.transpose(onehot)
-		label_onehot=tf.expand_dims(label_onehot,axis=0)
-		label_onehot=tf.expand_dims(label_onehot,axis=-1)
-		label_onehot=tf.expand_dims(label_onehot,axis=-1)
-
-
-		output = tf.nn.conv2d(label_onehot,kernel,strides=[1,1,1,1],padding="SAME")
-		output = tf.squeeze(output,[0,-1])
-		convlabel = tf.transpose(output)
-		convlabel = tf.expand_dims(convlabel,axis=0)
-
-		#Todo: if locref, return locref
-		if self.cfg.locref:
-			indexfun = tf.abs(tf.range(0,depth) - label)
-			locref_target = tf.multiply(indexfun,convlabel)*self.cfg.locrefstdev
-			return img, onehot, convlabel, locref_target
-		else:
-			return img, onehot, convlabel
-
-	def parse_fn_notprocessed(self,img,coords):
-		#cut out the image centered around the x,y coordinate
-		#buffer the image if the image is at the corners
-		img_cutouts=img
-		return img_cutouts
 
 
 
